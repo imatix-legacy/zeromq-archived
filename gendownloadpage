@@ -90,6 +90,9 @@ th { text-align: left; };
 
     <p>The main ZeroMQ website can be found at 
        <a href="http://www.zeromq.org/">www.zeromq.org</a>.</p>
+
+    <p><a href="MD5SUMS">MD5SUMS of these archives</a> |
+       <a href="SHA1SUMS">SHA1SUMS of these archives</a></p>
     <hr>
 '''.strip()
 
