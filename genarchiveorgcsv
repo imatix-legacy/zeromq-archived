@@ -1,0 +1,390 @@
+#! /usr/bin/python
+# Generate an archive.org CSV file for uploader, based on a given
+# directory tree and/or file list.
+#
+# Usage: genarchiveorgcsv FILE_OR_DIRECTORY [FILE_OR_DIRECTORY ...]
+#
+# Released under The MIT License (MIT):
+#
+# Copyright (c) 2016, Naos Ltd, iMatix Corporation sprl
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject
+# to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
+# ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# Written by Ewen McNeill <ewen@naos.co.nz>, 2016-05-19
+# Updated by Ewen McNeill <ewen@naos.co.nz>, 2016-05-26
+#---------------------------------------------------------------------------
+# NOTE: this contains lots of hard coded assumptions about the format of
+# filenames, and what filenames represent what things. It's also not very
+# efficient on string maniplation, but we assume the quantities are small
+# enough it doesn't matter.
+#---------------------------------------------------------------------------
+
+from __future__  import print_function
+import csv
+import os
+import sys
+from   datetime  import datetime
+from   itertools import chain
+
+#---------------------------------------------------------------------------
+
+OPENAMQ_DESCRIPTION = '''
+<p>OpenAMQ (<a href="http://www.openamq.org/">website</a>; <a
+href="http://openamq.wikidot.com/">wikidot</a>) is an implementation
+of the original <a
+href="https://en.wikipedia.org/wiki/Advanced_Message_Queuing_Protocol">AMQP</a>
+protocol, developed by <a href="http://www.imatix.com/">iMatix
+Corporation</a>  It was the reference implementation for the original
+(pre-1.0) AMQ Protocol; the AMQP 1.0 protocol <a
+href="http://www.imatix.com/articles:whats-wrong-with-amqp/">diverged
+considerably from this original design</a>.</p>
+
+<p>iMatix Corporation developed OpenAMQ from 2004 to 2009.  The
+<a href="https://github.com/imatix/openamq">development history</a>
+can be <a href="https://github.com/imatix/">found on the iMatix GitHub
+page</a>.  This collection contains the original OpenAMQ source release
+archives, as they were originally released (mostly in <code>zip</code>
+and <code>tar.gz</code> formats).</p>
+
+<p>After OpenAMQ, some of the developers went on to create <a
+href="http://zeromq.org/">ZeroMQ</a> (<a
+href="https://github.com/zeromq/">GitHub page</a>), influenced by
+their OpenAMQ experience.</p>
+'''.strip().replace('\n', ' ')
+
+ZEROMQ_DESCRIPTION = '''
+<p>ZeroMQ (<a href="http://zeromq.org/">website</a>), also known
+as 0MQ, is a distributed messaging platform.  It was originally
+developed by FastMQ (founded by Martin Sustrik and Pieter Hintjens)
+between 2007 and 2009, and then <a
+href="http://lists.zeromq.org/pipermail/zeromq-dev/2009-November/001353.html">acquired
+by iMatix Corporation</a> in November 2009.  Since 2009 it has been
+developed by the ZeroMQ Project using <a
+href="http://rfc.zeromq.org/spec:42">the C4 development process</a>.</p>
+
+<p><a href="https://github.com/zeromq/">ZeroMQ is now maintained
+on GitHub</a> in a series of repositories: <a
+href="https://github.com/zeromq/libzmq">libzmq</a> has the core
+(C++) implementation, <a href="https://github.com/zeromq/czmq">czmq</a>
+has a C wrapper, and there are bindings for many other popular
+software development languages including Python, Go, .NET, etc.</p>
+
+<p>This collection includes the early source archives released by
+FastMQ, iMatix Corporation and the ZeroMQ Project, including
+development between 2007 and 2015.  Current releases are available
+through the GitHub Releases mechanism (eg, <a
+href="https://github.com/zeromq/zeromq4-1/releases">ZeroMQ 4.1
+releases</a>, <a href="https://github.com/zeromq/czmq/releases">czmq
+releases</a>).</p>
+'''.strip().replace('\n', ' ')
+
+#---------------------------------------------------------------------------
+
+VERBOSE = False
+IS_TEST = False
+
+DISPOSITION = {
+    # Full projects
+    'openamq': {
+        'mediatype':       'software',
+        'collection':      'opensource',
+        'include_version': True,
+        'subject':         ['software', 'source', 'message_queue',
+                            'opensource', 'gpl', 'imatix', 'openamq', 'amqp'],
+        'contributor':     'iMatix Corporation sprl',
+        'creator':         'iMatix Corporation sprl',
+        'title_format':    'OpenAMQ {0} Source Archive',
+        'licenseurl':      ['http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt',
+                            'http://www.gnu.org/licenses/gpl-3.0.txt',
+                            'https://www.mozilla.org/en-US/MPL/2.0/'],
+        'description':      OPENAMQ_DESCRIPTION,
+    },
+    'zeromq':  {
+        'mediatype':       'software',
+        'collection':      'opensource',
+        'include_version': True,
+        'subject':         ['software', 'source', 'message_queue',
+                            'opensource', 'imatix', 'fastmq', 'zeromq'],
+        'contributor':     'iMatix Corporation sprl',
+        'creator':         'The ZeroMQ Project',
+        'title_format':    'ZeroMQ {0} Source Archive',
+        'licenseurl':      ['http://www.gnu.org/licenses/lgpl-3.0.en.html',
+                            'http://www.gnu.org/licenses/gpl-3.0.txt'],
+        'description':      ZEROMQ_DESCRIPTION,
+    },
+
+    # Sub-projects, just with titles
+    'openamq_base': {
+        'title_format':    'OpenAMQ Base Library Dependencies',
+        'include_version': False,
+    },
+    'openamq_foreign': {
+        'title_format':    'OpenAMQ Foreign Library Dependencies',
+        'include_version': False,
+    },
+    'openamq_gsl4': {
+        'title_format':    'OpenAMQ: GSL 4.x Language (Build dependency)',
+        'include_version': False,
+    },
+    'zeromq_czmq': {
+        'title_format':    'ZeroMQ CZMQ {0} Source (C API)',
+    },
+    'zeromq_zapi': {
+        'title_format':    'ZeroMQ ZAPI {0} Source (Early ZeroMQ C API)',
+    },
+}
+
+FIELD_ORDER = '''identifier file collection mediatype title subject
+                 licenseurl contributor creator date description'''.split()
+
+# Standardise identifiers, so that they all begin with the project name
+PREFIX_TO_IDENTIFIER = {
+    'base':    'openamq_base',
+    'ibase':   'openamq_base',
+    'boom':    'openamq_base',
+    'foreign': 'openamq_foreign',
+    'gsl':     'openamq_gsl4',
+    'zmq':     'zeromq',
+    'czmq':    'zeromq_czmq',
+    'zapi':    'zeromq_zapi',
+    'libzapi': 'zeromq_zapi',
+}
+
+#---------------------------------------------------------------------------
+def debug(message):
+    if VERBOSE:
+        print(message, file=sys.stderr)
+
+def strip_extension(filename):
+    return filename.replace(".tar.gz", "") \
+                   .replace(".zip", "")    \
+                   .replace(".bin", "")    \
+                   .replace(".exe", "")    \
+                   .replace(".msi", "")
+
+def canonicalise_prefix(prefix):
+    lc_prefix = prefix.lower()
+    return PREFIX_TO_IDENTIFIER.get(lc_prefix, lc_prefix)
+
+def project_of_prefix(prefix):
+    return (prefix.split('_'))[0]      # First part of prefix is project
+
+def canonicalise_version(version):
+    if '.' not in version:             # Insert "."s in version if non present
+        return ".".join(list(version))
+
+    return version
+
+def get_file_prefix_version(filename):
+    (prefix, version) = (strip_extension(filename).split("-"))[0:2]
+    return (canonicalise_prefix(prefix), canonicalise_version(version))
+
+def should_include_version(prefix):
+    if 'include_version' in DISPOSITION[prefix]:
+       return DISPOSITION[prefix]['include_version']
+
+    project = project_of_prefix(prefix)
+    return DISPOSITION[project]['include_version']
+
+def format_archive_org_identifier(prefix, version):
+    if should_include_version(prefix):
+        return "_".join((prefix, version))
+    else:
+        return prefix
+
+def get_archive_org_identifier(prefix, version):
+    if IS_TEST:
+        return "test_" + format_archive_org_identifier(prefix, version)
+    else:
+        return format_archive_org_identifier(prefix, version)
+
+def get_archive_org_value(prefix, key):
+    return DISPOSITION[prefix][key]
+
+def get_archive_org_title(prefix, version):
+    if should_include_version(prefix):
+        return DISPOSITION[prefix]['title_format'].format(version)
+    else:
+        return DISPOSITION[prefix]['title_format']
+
+def get_file_created_date(fullpath):
+    return "{:%Y-%m-%d}".format(datetime.fromtimestamp(
+                                          os.path.getmtime(fullpath)))
+
+#---------------------------------------------------------------------------
+def sort_key_of_fullpath(fullpath):
+    return "_".join(get_file_prefix_version(os.path.basename(fullpath)))
+
+def sort_by_prefix_version(unordered):
+    return sorted(unordered, key=lambda x: sort_key_of_fullpath(x))
+
+# Identify if a given filename is wanted in the upload
+def is_file_wanted(root, filename):
+    fullpath = os.path.join(root, filename)
+    if "-" in filename:
+        prefix, version = get_file_prefix_version(filename)
+        if prefix in DISPOSITION and str.isdigit(version[0]):
+            debug("{0} -> [{1}, {2}]".format(fullpath, prefix, version))
+            return True
+        else:
+            debug("{0} -- SKIPPING (other file)".format(fullpath))
+    else:
+        debug("{0} -- SKIPPING (no version)".format(fullpath))
+
+# traverse root directory, and list directories as dirs and files as files
+def collect_applicable_filepaths(base_location, predicate):
+    include = []
+    for root, _, files in os.walk(base_location):
+        for filename in files:
+            if (predicate(root, filename)):
+                include.append(os.path.join(root, filename))
+
+    return include
+
+# pick the version of a file to preserve if there is more than one
+# (this is very naive, but sufficient for the conflicts we have in practice)
+def pick_best_file(candidates):
+    best = candidates[0]  # Default to the first file
+    for c in candidates:
+        if '/stable/' in c:
+            best = c      # Use file in stable directory if any
+
+    return best
+
+# Yield dictionary with details of each file
+#
+# Thanks to Python TIMTOWTDI (oh, wait, that's supposed to be Perl), building
+# a dictionary inline from a map and some static items is hard :-(
+#
+# http://treyhunner.com/2016/02/how-to-merge-dictionaries-in-python/
+#
+STATIC_METADATA_FIELDS = '''collection mediatype subject
+                            licenseurl contributor creator
+                            description'''.split()
+
+def generate_upload_details(candidates):
+    for c in candidates:
+        prefix, version = get_file_prefix_version(os.path.basename(c))
+        project = project_of_prefix(prefix)
+        yield {
+            k:v for k, v in chain(
+                (   # Metadata that needs calculating
+                    ('identifier', get_archive_org_identifier(prefix, version)),
+                    ('file',       c),
+                    ('title',      get_archive_org_title(prefix, version)),
+                    ('date',       get_file_created_date(c)),
+                ),
+                (   # Common metadata
+                    (m, get_archive_org_value(project, m))
+                        for m in STATIC_METADATA_FIELDS
+                )
+            )
+        }
+
+#---------------------------------------------------------------------------
+# Output CSV suitable for archive.org tool
+#
+# Field order is in fields.  Some fields are multi-value, where we have
+# a list or tuple; rest are single value.
+#
+# We baby-duck on the first row to figure out how many of each.
+#
+def make_get_field(field, idx=-1):
+    def get_field(data):
+        if idx >= 0:
+            return data[field][idx]    # Indexable field
+        else:
+            return data[field]         # Simple field
+
+    return get_field
+
+# Build headers and field source
+#
+def make_header_field_source(row, fields):
+    headers      = []
+    field_source = []
+
+    for field in fields:
+	if field in row:
+	    if isinstance(row[field], str):
+		# Simple field
+		headers.append(field)
+		field_source.append(make_get_field(field))
+	    else:
+		# List of fields
+		for idx, _ in enumerate(row[field]):
+		    headers.append("{0}[{1}]".format(field,idx))
+		    field_source.append(make_get_field(field, idx))
+
+    return headers, field_source
+
+def output_csv(files_to_upload, fields):
+    field_sources = None
+
+    output = csv.writer(sys.stdout)
+
+    for row in files_to_upload:
+        if not field_sources:
+            headers, field_sources = make_header_field_source(row, fields)
+            output.writerow(headers)
+
+        output.writerow(map(lambda f: f(row), field_sources))
+
+#---------------------------------------------------------------------------
+# Mainline
+#
+def main():
+    # Check for arguments
+    if (not len(sys.argv) > 1):
+        print("Usage: {0} FILE_OR_DIRECTORY [FILE_OR_DIRECTORY ...]".format(
+              sys.argv[0]), file=sys.stderr)
+        sys.exit(1)
+
+    # Collect all valid paths
+    to_process = []
+    for base_location in sys.argv[1:]:
+        to_process.extend(collect_applicable_filepaths(base_location,
+                                                       is_file_wanted))
+
+    # Build map from the filename to potential pathnames
+    basename_paths = {}
+    for c in to_process:
+        basename_paths.setdefault(os.path.basename(c), []).append(c)
+
+    # Sort out conflicts
+    conflicts = [c for c in basename_paths if len(basename_paths[c]) > 1]
+
+    for c in conflicts:
+        basename_paths[c] = [pick_best_file(basename_paths[c]),]
+
+    # Merge together by filename ignoring directory, into order
+    processing = (x[0] for x in basename_paths.values())
+    candidates = sort_by_prefix_version(processing)
+    #print("\n".join(candidates))
+
+    # Collect up details needed for upload
+    files_to_upload = generate_upload_details(candidates)
+
+    # Generate CSV
+    output_csv(files_to_upload, FIELD_ORDER)
+
+# Execute main function only if run directly
+if __name__ == "__main__":
+    main()

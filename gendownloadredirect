@@ -1,0 +1,76 @@
+#! /usr/bin/python
+# Generate a CSV file of "original file" and "permanent URL"
+#
+# Usage: gendownloadredirect CSV
+#
+# Released under The MIT License (MIT):
+#
+# Copyright (c) 2016, Naos Ltd, iMatix Corporation sprl
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject
+# to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
+# ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# Written by Ewen McNeill <ewen@naos.co.nz>, 2016-06-08
+# Updated by Ewen McNeill <ewen@naos.co.nz>, 2016-06-08
+#---------------------------------------------------------------------------
+# NOTE: this contains lots of hard coded assumptions about the format of
+# filenames, and what filenames represent what things. It's also not very
+# efficient on string maniplation, but we assume the quantities are small
+# enough it doesn't matter.
+#---------------------------------------------------------------------------
+
+from __future__  import print_function
+import csv
+import os
+import sys
+
+DOWNLOAD_PREFIX = 'https://archive.org/download'
+CSV_HEADER      = ('filename','url')
+
+# Build (name, url) tuples
+def get_filename_url(csv_file):
+    with open(csv_file, "r") as data:
+        input = csv.DictReader(data)
+
+        for row in input:
+            identifier = row['identifier']
+            filename   = os.path.basename(row['file'])
+            url        = "/".join((DOWNLOAD_PREFIX, identifier, filename))
+
+            yield (filename, url)
+
+#---------------------------------------------------------------------------
+# Mainline
+#
+def main():
+    # Check for arguments
+    if (not len(sys.argv) > 1):
+        print("Usage: {0} CSV".format(
+              sys.argv[0]), file=sys.stderr)
+        sys.exit(1)
+
+    output = csv.writer(sys.stdout)
+    output.writerow(CSV_HEADER)
+
+    for entry in get_filename_url(sys.argv[1]):
+        output.writerow(entry)
+
+# Execute main function only if run directly
+if __name__ == "__main__":
+    main()
