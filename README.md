@@ -36,7 +36,7 @@ This repository contains:
 It also contains two files to facilitate implementing a "redirect service"
 from the old filenames to their new locations:
 
-*   [csv/zeromq-redirect.csv](zeromq-redirect.csv) -- a filename and new URL mapping CSV
+*   [csv/zeromq-redirect.csv](csv/zeromq-redirect.csv) -- a filename and new URL mapping CSV
 
 *   [gendownloadredirect](gendownloadredirect) -- the tool that built the redirect CSV
 
