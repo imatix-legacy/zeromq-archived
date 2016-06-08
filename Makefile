@@ -2,7 +2,8 @@
 
 GENTOOL=./genarchiveorgcsv
 GENREDIRECT=./gendownloadredirect
-ZEROMQ=csv/zeromq.csv csv/zeromq-1st.csv csv/zeromq-rest.csv csv/zeromq-redirect.csv
+GENDOWNLOAD=./gendownloadpage
+ZEROMQ=csv/zeromq.csv csv/zeromq-1st.csv csv/zeromq-rest.csv csv/zeromq-redirect.csv zeromq-download.html
 
 all: $(ZEROMQ)
 
@@ -17,3 +18,6 @@ csv/zeromq-rest.csv: csv/zeromq.csv
 
 csv/zeromq-redirect.csv: csv/zeromq.csv
 	$(GENREDIRECT) $< >$@
+
+zeromq-download.html: csv/zeromq.csv $(GENDOWNLOAD) 
+	$(GENDOWNLOAD) $< >$@

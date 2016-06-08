@@ -1,0 +1,223 @@
+#! /usr/bin/python
+# Generate a HTML "index" page for downloads from archive.org
+#
+# Usage: gendownloadpage CSV
+#
+# Released under The MIT License (MIT):
+#
+# Copyright (c) 2016, Naos Ltd, iMatix Corporation sprl
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject
+# to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
+# ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# Written by Ewen McNeill <ewen@naos.co.nz>, 2016-05-26
+# Updated by Ewen McNeill <ewen@naos.co.nz>, 2016-06-08
+#---------------------------------------------------------------------------
+# NOTE: this contains lots of hard coded assumptions about the format of
+# filenames, and what filenames represent what things. It's also not very
+# efficient on string maniplation, but we assume the quantities are small
+# enough it doesn't matter.
+#---------------------------------------------------------------------------
+
+from __future__  import print_function
+import csv
+import os
+import sys
+
+DOWNLOAD_PREFIX = 'https://archive.org/download'
+LINKTYPES = ['tarball', 'zip' ]
+PRETTY_NAMES = {
+    'zeromq':      'ZeroMQ',
+    'zeromq_czmq': 'CZMQ',
+    'zeromq_zapi': 'ZAPI',
+}
+SECTION_ORDER = ['ZeroMQ_4', 'ZeroMQ_3', 'ZeroMQ_2', 'ZeroMQ_1', 
+                 'CZMQ', 'ZAPI']
+SECTION_NAME  = {
+    'ZeroMQ_4': 'ZeroMQ 4.x',
+    'ZeroMQ_3': 'ZeroMQ 3.x',
+    'ZeroMQ_2': 'ZeroMQ 2.x',
+    'ZeroMQ_1': 'Early ZeroMQ',
+    'CZMQ':     'C ZMQ API',
+    'ZAPI':     'ZAPI',
+}
+
+
+HEADER='''
+<html>
+  <head>
+    <title>ZeroMQ Historical Downloads</title>
+    <style>
+th { text-align: left; };
+    </style>
+  </head>
+  <body>
+    <img src="zeromq-logo.png"/>
+
+    <h1>Welcome to the ZeroMQ Historical downloads site!</h1>
+
+    <p>All older ZeroMQ releases can be found here.</p>
+
+    <p>New ZeroMQ releases can be found on the ZeroMQ GitHub Release pages:</p>
+    <ul>
+      <li><a href="https://github.com/zeromq/zeromq4-1/releases">ZeroMQ 4.x</a></li>
+      <li><a href="https://github.com/zeromq/zeromq3-x/releases">ZeroMQ 3.x</a></li>
+    </ul>
+
+    <p>The 0MQ lightweight messaging kernel is a library which
+       extends the standard socket interfaces with features
+       traditionally provided by specialised messaging middleware
+       products. 0MQ sockets provide an abstraction of asynchronous
+       message queues, multiple messaging patterns, message filtering
+       (subscriptions), seamless access to multiple transport
+       protocols and more.</p>
+
+    <p>The main ZeroMQ website can be found at 
+       <a href="http://www.zeromq.org/">www.zeromq.org/</a>.</p>
+    <hr>
+'''.strip()
+
+TABLE_HEADER='''
+    <hr>
+
+    <h2><a name="{1}">{0}</a></h2>
+    
+    <table border=0>
+      <thead>
+        <tr><th>Release</th><th>Downloads</th></tr>
+      </thead>
+      <tbody>
+'''.rstrip().lstrip('\n')
+
+TABLE_FOOTER='''
+      </tbody>
+    </table>
+'''.rstrip().lstrip('\n')
+
+FOOTER='''
+  </body>
+</html>
+'''.rstrip().lstrip('\n')
+
+
+def get_name_version(identifier):
+    name, version = identifier.rsplit('_', 1)
+    return (name, version)
+
+def get_pretty_name(identifier):
+    name, _ = get_name_version(identifier)
+    return PRETTY_NAMES.get(name, name)
+
+def get_version(identifier):
+    _, version = get_name_version(identifier)
+    return version
+
+def get_urls(csv_file):
+    with open(csv_file, "r") as data:
+        input = csv.DictReader(data)
+
+        last_identifier = None
+        entry = None
+
+        for row in input:
+            identifier = row['identifier']
+            if last_identifier and identifier != last_identifier:
+                yield entry
+                entry = None
+
+            last_identifier = identifier
+            if not entry:
+                entry = { 
+                    'name':    get_pretty_name(identifier),
+                    'version': get_version(identifier),
+                }
+
+            filename  = os.path.basename(row['file'])
+            url       = "/".join((DOWNLOAD_PREFIX, identifier, filename))
+
+            if '.zip' in filename:
+                entry['zip'] = url
+            elif '.tar.gz' in filename:
+                entry['tarball'] = url
+
+        if entry:
+            yield entry
+
+def make_links(entry):
+    links = []
+    for linktype in LINKTYPES:
+        if linktype in entry:
+            links.append('<a href="{0}">{1}</a>'.format(entry[linktype],
+                                                              linktype))
+
+    return ", ".join(links)
+
+def print_entry(entry):
+    print('        <tr><td>{0} {1}</td><td>{2}</td></tr>'.format(
+                   entry['name'], entry['version'],
+                   make_links(entry)))
+
+#---------------------------------------------------------------------------
+# Mainline
+#
+def main():
+    # Check for arguments
+    if (not len(sys.argv) > 1):
+        print("Usage: {0} CSV".format(
+              sys.argv[0]), file=sys.stderr)
+        sys.exit(1)
+
+    # Print page heading, and set of "jump to" links
+    # ZeroMQ 4.x | ZeroMQ 3.x | ...
+    print(HEADER)
+    print("<p>{0}</p>".format(
+           ' | '.join(('<a href="#{0}">{1}</a>'.format(section, 
+                                          SECTION_NAME[section])
+                    for section in SECTION_ORDER))))
+
+    # Divide entries up into sections by project
+    entries = {}    # Section -> [rows]
+    for entry in get_urls(sys.argv[1]):
+        entries.setdefault(entry['name'], []).append(entry)
+
+    # Divide ZeroMQ entries up into sections by major version
+    #
+    for entry in entries['ZeroMQ']:
+        major_version = entry['version'][0]
+        if major_version == '0': 
+            major_version = '1'
+
+        section = 'ZeroMQ_{0}'.format(major_version)
+        entries.setdefault(section, []).append(entry)
+
+    del entries['ZeroMQ']
+
+    for section in SECTION_ORDER:
+        print(TABLE_HEADER.format(SECTION_NAME[section], section))
+
+        for entry in reversed(entries[section]):
+            print_entry(entry)
+
+        print(TABLE_FOOTER)
+
+    print(FOOTER)
+
+# Execute main function only if run directly
+if __name__ == "__main__":
+    main()
