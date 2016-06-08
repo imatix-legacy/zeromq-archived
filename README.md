@@ -19,6 +19,10 @@ and future releases will be added to those (and related) GitHub Release
 pages.  See the [ZeroMQ "Get the Software"](http://zeromq.org/intro:get-the-software)
 page for more information on current downloads.
 
+An index page listing all the historical release downloads can be viewed at
+
+[https://imatix-legacy.github.io/zeromq-archived/](https://imatix-legacy.github.io/zeromq-archived/)
+
 This repository contains:
 
 *   [genarchiveorgcsv](genarchiveorgcsv) -- the script used to make the archive.org bulk-upload CSV
