@@ -89,7 +89,7 @@ th { text-align: left; };
        protocols and more.</p>
 
     <p>The main ZeroMQ website can be found at 
-       <a href="http://www.zeromq.org/">www.zeromq.org/</a>.</p>
+       <a href="http://www.zeromq.org/">www.zeromq.org</a>.</p>
     <hr>
 '''.strip()
 
