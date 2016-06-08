@@ -11,9 +11,9 @@ ZeroMQ.
 Current releases of ZeroMQ can be found on the GitHub Release pages
 for the relevant projects:
 
-*   [ZeroMQ 4.x](https://zeromq.github.io/zeromq4-1/)
+*   [ZeroMQ 4.x](https://github.com/zeromq/zeromq4-1/releases)
 
-*   [ZeroMQ 3.x](https://zeromq.github.io/zeromq3-x/)
+*   [ZeroMQ 3.x](https://github.com/zeromq/zeromq3-x/releases)
 
 and future releases will be added to those (and related) GitHub Release
 pages.  See the [ZeroMQ "Get the Software"](http://zeromq.org/intro:get-the-software)
