@@ -46,3 +46,12 @@ from the old filenames to their new locations:
 
 (plus a Makfile that rebuilds all of these; note that `csv/zeromq.csv` 
 cannot be rebuilt without the contents of the original hosting VM).
+
+And two additional files to store "difficult to re-create" metadata:
+
+*   [csv/zeromq-metadata.csv](csv/zeromq-metadata.csv) -- filename, modified time, file size in bytes
+
+*   [genmetadatacsv](genmetadatacsv) -- tool that built the `zeromq-metadata.csv`
+
+(Note that the metadata CSV file can obvoiusly only be built with the 
+orginal download files available.)

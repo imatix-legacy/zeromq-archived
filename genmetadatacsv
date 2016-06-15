@@ -1,0 +1,97 @@
+#! /usr/bin/env python
+#
+# Output CSV of filename,last modified date/time, size for a given directory 
+#
+# Usage: genmetadatacsv DIRECTORY [DIRECTORY]
+#
+# Released under The MIT License (MIT):
+#
+# Copyright (c) 2016, Naos Ltd, iMatix Corporation sprl
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject
+# to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
+# ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+# Written by Ewen McNeill <ewen@naos.co.nz>, 2016-06-15
+#---------------------------------------------------------------------------
+
+from __future__  import print_function
+import csv
+from   datetime import datetime
+import os
+import sys
+
+DATETIME_FMT = '%Y-%m-%d %H-%M-%S'
+
+#---------------------------------------------------------------------------
+# For simplicity process all files
+is_file_wanted = lambda _r, _f: True
+
+def collect_applicable_filepaths(base_location, predicate):
+    include = []
+    for root, _, files in os.walk(base_location):
+        for filename in files:
+            if (predicate(root, filename)):
+                include.append(os.path.join(root, filename))
+
+    return include
+
+# XXX: this is rather inefficient and fairly kludgy :-(
+def remove_base(filepath, prefixes):
+    filename = filepath
+    for prefix in prefixes:
+        filename = filename.replace(prefix, '')
+
+    return filename
+
+#---------------------------------------------------------------------------
+def main():
+    # Check for arguments
+    if (not len(sys.argv) > 1):
+        print("Usage: {0} DIRECTORY [DIRECTORY ...]".format(
+              sys.argv[0]), file=sys.stderr)
+        sys.exit(1)
+
+    # Collect all valid paths
+    prefixes = [ prefix.rstrip('/') + '/' for prefix in sys.argv[1:] ]
+
+    to_process = []
+    for base_location in prefixes:
+        to_process.extend(collect_applicable_filepaths(base_location,
+                                                       is_file_wanted))
+
+    # Output information
+    out = csv.writer(sys.stdout)
+    out.writerow(['filename','last_modified', 'size_bytes'])
+
+    for filepath in sorted(to_process):
+        metadata = os.stat(filepath)
+
+        file_size                = metadata.st_size
+        last_modified_epoch_time = metadata.st_mtime
+        last_modified = datetime.fromtimestamp(last_modified_epoch_time).\
+                                 strftime(DATETIME_FMT)
+
+        filename = remove_base(filepath, prefixes)
+
+        out.writerow([filename, last_modified, file_size])
+
+#---------------------------------------------------------------------------
+# Execute main function only if run directly
+if __name__ == "__main__":
+    main()
