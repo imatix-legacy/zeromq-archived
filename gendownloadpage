@@ -68,7 +68,7 @@ th { text-align: left; };
     </style>
   </head>
   <body>
-    <img src="zeromq-logo.png"/>
+    <img src="static/zeromq-logo.png"/>
 
     <h1>Welcome to the ZeroMQ Historical downloads site!</h1>
 
